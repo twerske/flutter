@@ -28,7 +28,6 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
   EnginePlatformDispatcher() {
     _addBrightnessMediaQueryListener();
     HighContrastSupport.instance.addListener(_updateHighContrast);
-    _addFontSizeObserver();
     _addTypographySettingsObserver();
     _addLocaleChangedListener();
     registerHotRestartListener(dispose);
@@ -80,7 +79,6 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
 
   void dispose() {
     _removeBrightnessMediaQueryListener();
-    _disconnectFontSizeObserver();
     _disconnectTypographySettingsObserver();
     _removeLocaleChangedListener();
     HighContrastSupport.instance.removeListener(_updateHighContrast);
@@ -1006,42 +1004,6 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
     }
   }
 
-  /// Watches for font-size changes in the browser's <html> element to
-  /// recalculate [textScaleFactor].
-  ///
-  /// Updates [textScaleFactor] with the new value.
-  DomMutationObserver? _fontSizeObserver;
-
-  /// Set the callback function for updating [textScaleFactor] based on
-  /// font-size changes in the browser's <html> element.
-  void _addFontSizeObserver() {
-    const String styleAttribute = 'style';
-
-    _fontSizeObserver = createDomMutationObserver((
-      JSArray<JSAny?> mutations,
-      DomMutationObserver _,
-    ) {
-      for (final JSAny? mutation in mutations.toDart) {
-        final DomMutationRecord record = mutation! as DomMutationRecord;
-        if (record.type == 'attributes' && record.attributeName == styleAttribute) {
-          final double newTextScaleFactor = findBrowserTextScaleFactor();
-          _updateTextScaleFactor(newTextScaleFactor);
-        }
-      }
-    });
-    _fontSizeObserver!.observe(
-      domDocument.documentElement!,
-      attributes: true,
-      attributeFilter: <String>[styleAttribute],
-    );
-  }
-
-  /// Remove the observer for font-size changes in the browser's <html> element.
-  void _disconnectFontSizeObserver() {
-    _fontSizeObserver?.disconnect();
-    _fontSizeObserver = null;
-  }
-
   /// Watches for resize changes on an off-screen invisible element to
   /// recalculate [lineHeightScaleFactorOverride], [letterSpacingOverride],
   /// [wordSpacingOverride], and [paragraphSpacingOverride].
@@ -1114,6 +1076,7 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
       ..height = 'auto'
       ..whiteSpace = 'nowrap'
       // Set text spacing properties defaults.
+      ..fontSize = '1rem'
       ..lineHeight = '${spacingDefault}px'
       ..letterSpacing = '${spacingDefault}px'
       ..wordSpacing = '${spacingDefault}px'
@@ -1131,6 +1094,9 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
         'line-height',
       )?.toDouble();
       final double? fontSize = parseFontSize(_typographyMeasurementElement!)?.toDouble();
+      if (fontSize != null) {
+        _updateTextScaleFactor(fontSize / _defaultRootFontSize);
+      }
       final double? computedLineHeightScaleFactor = fontSize != null && lineHeight != null
           ? lineHeight / fontSize
           : null;

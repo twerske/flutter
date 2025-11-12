@@ -290,6 +290,13 @@ void testMain() {
 
       root.style.fontSize = '20px';
       await Future<void>.delayed(Duration.zero);
+      // Wait for ResizeObserver
+      final Completer<void> completer = Completer<void>();
+      domWindow.requestAnimationFrame((_) {
+        Timer.run(completer.complete);
+      });
+      await completer.future;
+
       expect(root.style.fontSize, '20px');
       expect(isCalled, isTrue);
       expect(ui.PlatformDispatcher.instance.textScaleFactor, findBrowserTextScaleFactor());
@@ -298,10 +305,56 @@ void testMain() {
 
       root.style.fontSize = '16px';
       await Future<void>.delayed(Duration.zero);
+      // Wait for ResizeObserver
+      final Completer<void> completer2 = Completer<void>();
+      domWindow.requestAnimationFrame((_) {
+        Timer.run(completer2.complete);
+      });
+      await completer2.future;
+
       expect(root.style.fontSize, '16px');
       expect(isCalled, isTrue);
       expect(ui.PlatformDispatcher.instance.textScaleFactor, findBrowserTextScaleFactor());
     });
+
+    test(
+      'calls onTextScaleFactorChanged when html font size changes via CSS class/style tag',
+      () async {
+        final DomElement root = domDocument.documentElement!;
+        final DomElement styleElement = createDomHTMLStyleElement(null);
+        domDocument.head!.append(styleElement);
+
+        final ui.VoidCallback? oldCallback =
+            ui.PlatformDispatcher.instance.onTextScaleFactorChanged;
+
+        bool isCalled = false;
+        ui.PlatformDispatcher.instance.onTextScaleFactorChanged = () {
+          isCalled = true;
+        };
+
+        addTearDown(() {
+          styleElement.remove();
+          ui.PlatformDispatcher.instance.onTextScaleFactorChanged = oldCallback;
+        });
+
+        // Change font size via CSS rule
+        styleElement.sheet!.insertRule('html { font-size: 20px !important; }', 0);
+
+        // Wait for ResizeObserver
+        final Completer<void> completer = Completer<void>();
+        domWindow.requestAnimationFrame((_) {
+          Timer.run(completer.complete);
+        });
+        await completer.future;
+
+        expect(
+          isCalled,
+          isTrue,
+          reason: 'onTextScaleFactorChanged should be called when font size changes via CSS',
+        );
+        expect(ui.PlatformDispatcher.instance.textScaleFactor, 1.25);
+      },
+    );
 
     test('calls onMetricsChanged when the typography measurement element size changes', () async {
       final DomElement root = domDocument.documentElement!;
