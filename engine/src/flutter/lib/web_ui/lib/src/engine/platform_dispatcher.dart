@@ -29,6 +29,7 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
     _addBrightnessMediaQueryListener();
     HighContrastSupport.instance.addListener(_updateHighContrast);
     _addTypographySettingsObserver();
+    _addTextScaleObserver();
     _addLocaleChangedListener();
     registerHotRestartListener(dispose);
     _appLifecycleState.addListener(_setAppLifecycleState);
@@ -80,6 +81,7 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
   void dispose() {
     _removeBrightnessMediaQueryListener();
     _disconnectTypographySettingsObserver();
+    _removeTextScaleObserver();
     _removeLocaleChangedListener();
     HighContrastSupport.instance.removeListener(_updateHighContrast);
     _appLifecycleState.removeListener(_setAppLifecycleState);
@@ -1094,9 +1096,6 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
         'line-height',
       )?.toDouble();
       final double? fontSize = parseFontSize(_typographyMeasurementElement!)?.toDouble();
-      if (fontSize != null) {
-        _updateTextScaleFactor(fontSize / _defaultRootFontSize);
-      }
       final double? computedLineHeightScaleFactor = fontSize != null && lineHeight != null
           ? lineHeight / fontSize
           : null;
@@ -1156,6 +1155,39 @@ class EnginePlatformDispatcher extends ui.PlatformDispatcher {
     _typographySettingsObserver = null;
     _typographyMeasurementElement?.remove();
     _typographyMeasurementElement = null;
+  }
+
+  DomResizeObserver? _textScaleObserver;
+  DomElement? _textScaleElement;
+
+  void _addTextScaleObserver() {
+    _textScaleElement = createDomHTMLParagraphElement();
+    _textScaleElement!.text = 'flutter text scale measurement';
+    _textScaleElement!.setAttribute('aria-hidden', 'true');
+    _textScaleElement!.style
+      ..position = 'fixed'
+      ..bottom = '100%'
+      ..visibility = 'hidden'
+      ..pointerEvents = 'none'
+      ..fontSize = '1rem';
+    domDocument.body!.append(_textScaleElement!);
+    _textScaleObserver = createDomResizeObserver((
+      List<DomResizeObserverEntry> entries,
+      DomResizeObserver observer,
+    ) {
+      final double? fontSize = parseFontSize(_textScaleElement!)?.toDouble();
+      if (fontSize != null) {
+        _updateTextScaleFactor(fontSize / _defaultRootFontSize);
+      }
+    });
+    _textScaleObserver!.observe(_textScaleElement!);
+  }
+
+  void _removeTextScaleObserver() {
+    _textScaleObserver?.disconnect();
+    _textScaleObserver = null;
+    _textScaleElement?.remove();
+    _textScaleElement = null;
   }
 
   void _setAppLifecycleState(ui.AppLifecycleState state) {
